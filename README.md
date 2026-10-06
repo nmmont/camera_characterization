@@ -7,7 +7,11 @@ Raw images (DNG) are captured utilizing the Open Camera Android App with Camera2
 Only a single lens (main lens 1) is utilized through Open Camera.
 
 Pixel 9 Lens 1 Properties:
+
  Device Model:    Pixel 9
+ 
  Focal Length:    6.9 mm
+ 
  F-stop:          f/1.68
+ 
  Sensor Shape:    (4080, 3072) (Width x Height)
