@@ -1,0 +1,38 @@
+# camera_characterization/config.yaml
+
+# Global project settings
+project:
+  camera_name: "AUTO"        # Automatically extracts device name from EXIF tags [INDEX: 0.1.2]
+  output_dir: "./outputs"    # Where results.json and reports will be saved [INDEX: 0.1.3]
+
+# 1. Geometry & Lens Distortion Calibration Parameters [INDEX: 0.1.3]
+geometry:
+  input_dir: "./images/checkerboard"
+  file_extension: ".dng"
+  jpg_extension: ".jpg"
+  focal_35mm_fallback: 25
+  checkerboard:
+    rows: 6                  # Number of INNER intersection rows
+    cols: 9                  # Number of INNER intersection columns
+    square_size_mm: 19.0     # Physical length of a square edge in millimeters
+
+# 2. Poisson-Gaussian Sensor Noise Model Parameters [INDEX: 0.1.3]
+noise:
+  flat_field_dir: "./images/noise_flats"
+  dark_field_dir: "./images/noise_darks"
+  file_extension: ".dng"
+  patch_box:
+    ymin: 1472               # Central patch bounding box coordinates
+    xmin: 1976               # Extracts a small patch to bypass lens shading errors [INDEX: 0.1.3]
+    ymax: 1600
+    xmax: 2104
+
+# 3. Spatial Resolution (MTF Slanted-Edge) Parameters [INDEX: 0.1.3]
+resolution:
+  input_dir: "./images/resolution"
+  file_extension: ".dng"
+
+# 5. Color Metric Calibration Parameters [INDEX: 0.1.3]
+color:
+  input_dir: "./images/color"
+  file_extension: ".dng"
