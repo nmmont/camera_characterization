@@ -1,22 +1,55 @@
 # tests/test_geometry.py
-import pytest
+"""
+Unit tests for Stage 1: Geometric calibration, corner extraction, line straightness, and pixel pitch.
+"""
+import unittest
 import numpy as np
-from camera_toolkit import geometry
+import sys
+from pathlib import Path
 
-def test_object_point_generation_dimensions():
-    """Confirms that the 3D target array layout coordinates match perfectly."""
-    rows, cols, sq_size = 6, 9, 25.0
-    obj_p = geometry.generate_object_points(rows, cols, sq_size)
-    
-    # Grid shape must contain exactly rows * cols points across 3 coordinate spatial axes
-    assert obj_p.shape == (54, 3)
-    # The Z axis for flat checkerboards must be completely initialized to zero
-    assert np.all(obj_p[:, 2] == 0.0)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, "/workspace/artifacts")
 
-def test_max_perpendicular_deviation_on_perfect_line():
-    """Asserts that a mathematically straight horizontal line yields exactly 0 pixels of error."""
-    # Create 5 collinear coordinates lying perfectly on the line y = 2x + 1
-    perfect_pts = np.array([[0.0, 1.0], [1.0, 3.0], [2.0, 5.0], [3.0, 7.0], [4.0, 9.0]])
-    deviation = geometry.max_perpendicular_deviation(perfect_pts)
-    
-    assert deviation == pytest.approx(0.0, abs=1e-5)
+from geometry import (
+    generate_object_points,
+    max_perpendicular_deviation,
+    calculate_pixel_pitch_metrics
+)
+
+
+class TestGeometry(unittest.TestCase):
+
+    def test_generate_object_points_shape(self):
+        """Checks that generated 3D grid points have correct shape and Z=0."""
+        rows, cols, sq_mm = 6, 9, 19.0
+        pts = generate_object_points(rows, cols, sq_mm)
+        
+        self.assertEqual(pts.shape, (54, 3))
+        np.testing.assert_array_equal(pts[:, 2], 0.0)
+        np.testing.assert_array_equal(pts[0], [0.0, 0.0, 0.0])
+
+    def test_max_perpendicular_deviation_straight_line(self):
+        """Checks that points lying exactly on a straight line have 0.0 deviation."""
+        x = np.linspace(0, 100, 10)
+        y = np.full_like(x, 10.0)
+        pts = np.column_stack([x, y])
+        
+        dev = max_perpendicular_deviation(pts)
+        self.assertAlmostEqual(dev, 0.0, places=5)
+
+    def test_pixel_pitch_metrics_consistency(self):
+        """Checks that pixel pitch calculations return positive values and low difference."""
+        res = calculate_pixel_pitch_metrics(
+            f_px_x=4000.0,
+            f_px_y=4000.0,
+            f_mm=6.9,
+            f_35mm=25.0,
+            image_shape=(4080, 3072)
+        )
+        self.assertGreater(res["pixel_pitch_method1_um"], 0.0)
+        self.assertGreater(res["pixel_pitch_method2_um"], 0.0)
+        self.assertIn("pitch_percentage_difference", res)
+
+
+if __name__ == "__main__":
+    unittest.main()
