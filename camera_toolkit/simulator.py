@@ -2,13 +2,10 @@
 import cv2
 import numpy as np
 
-# =========================================================================
-# 1. SPATIAL RESOLUTION SIMULATOR (Preserved from your code)
-# =========================================================================
 
 def capture_edge(sigma: float = 1.0, angle_deg: float = 5.0, h: int = 256, w: int = 128, 
                  exposure: float = 0.55, seed: int = 0, noisy: bool = True) -> np.ndarray:
-    """Simulates a monochrome slanted-edge capture in linear light for MTF validation ``."""
+    """Simulates a monochrome slanted-edge capture in linear light for MTF validation."""
     slope = np.tan(np.deg2rad(angle_deg))
     yy, xx = np.mgrid[0:h, 0:w]
     edge = (xx > (w / 2) + slope * (yy - h / 2)).astype(float)
@@ -36,71 +33,45 @@ def capture_edge(sigma: float = 1.0, angle_deg: float = 5.0, h: int = 256, w: in
     return (raw.astype(float) - BLACK_LEVEL) / (WHITE_LEVEL - BLACK_LEVEL)
 
 
-# =========================================================================
-# 2. SENSOR NOISE & PHOTON TRANSFER CURVE SIMULATOR (New)
-# =========================================================================
-
 def generate_synthetic_flat_field(mean_signal_electrons: float, gain_dn_per_e: float, 
                                   read_noise_e: float, black_level_dn: float = 64.0, 
                                   patch_size: int = 128, seed: int = None) -> np.ndarray:
     """
-    Generates a uniform raw flat-field patch applying physical affine noise equations ``.
-    Enforces Var[D] = K(E[D] - B) + K^2 * sigma_r^2 ``.
+    Generates a uniform raw flat-field patch applying physical affine noise equations.
     """
     rng = np.random.default_rng(seed)
-    
-    # Photon Shot Noise (Poisson distribution on incoming light channel) ``
     lam = max(0.0, mean_signal_electrons)
     electrons = rng.poisson(lam, size=(patch_size, patch_size)).astype(np.float32)
-    
-    # Scale from electrons to Digital Numbers (DN) via conversion gain ``
     signal_dn = electrons * gain_dn_per_e
     
-    # Electronic Read Noise (Gaussian distribution in DN space) ``
     read_noise_std_dn = read_noise_e * gain_dn_per_e
     gauss_noise = rng.normal(0.0, read_noise_std_dn, size=(patch_size, patch_size))
     
-    # Combine signals and inject baseline black level sensor pedestal ``
     raw_frame = signal_dn + gauss_noise + black_level_dn
     return np.clip(np.round(raw_frame), 0, 1023).astype(np.uint16)
 
 
-def generate_flat_field_dataset(true_gain: float, true_read_noise: float, black_level: float = 64.0, 
-                                num_pairs: int = 12) -> list:
+def generate_flat_field_dataset(true_gain: float = 0.0213, true_read_noise: float = 2.5, black_level: float = 64.0, num_pairs: int = 12) -> list:
     """
-    Generates a full batch series of 12 flat-field image pairs spanning black to saturation.
-    Provides the perfect analytical test-twin for your PTC line-fitting loops ``.
+    Generates a full series of 12 flat-field image pairs spanning black to saturation limits.
     """
     dataset = []
-    # Generates uniform radiance steps from nearly black up to near-saturation limits
     radiance_levels = np.logspace(0.5, 2.9, num_pairs)
-    
     for idx, radiance in enumerate(radiance_levels):
-        # Generate pairs with identical illumination parameters but discrete noise seeds ``
         frame_a = generate_synthetic_flat_field(radiance, true_gain, true_read_noise, black_level, seed=idx*2)
         frame_b = generate_synthetic_flat_field(radiance, true_gain, true_read_noise, black_level, seed=idx*2 + 1)
         dataset.append((frame_a, frame_b))
-        
     return dataset
 
 
-# =========================================================================
-# 3. DARK CURRENT TIME-SERIES SIMULATOR (New)
-# =========================================================================
-
-def generate_synthetic_dark_series(dark_current_e_per_sec: float, gain: float, read_noise_e: float, 
+def generate_synthetic_dark_series(dark_current_e_per_sec: float = 0.5, gain: float = 0.0213, read_noise_e: float = 2.5, 
                                    black_level: float = 64.0, exposure_times: list = [0.1, 0.5, 1.0, 2.0], 
-                                   frames_per_step: int = 5) -> dict:
-    """
-    Generates simulated lens-capped dark frames accumulating thermal dark current over time ``.
-    Used to verify that your noise.py slope-fitter can accurately extract true electron rates ``.
-    """
+                                   frames_per_step: int = 2) -> dict:
+    """Generates simulated dark frames accumulating thermal dark current over time."""
     dark_series = {}
     for t_exp in exposure_times:
         frames = []
-        # Calculate mean thermal noise accumulated over exposure duration
         thermal_dark_electrons = dark_current_e_per_sec * t_exp
-        
         for i in range(frames_per_step):
             frame = generate_synthetic_flat_field(
                 mean_signal_electrons=thermal_dark_electrons,
@@ -114,34 +85,52 @@ def generate_synthetic_dark_series(dark_current_e_per_sec: float, gain: float, r
     return dark_series
 
 
-# =========================================================================
-# 4. GEOMETRIC PROJECTION GRID SIMULATOR (New)
-# =========================================================================
-
 def generate_synthetic_checkerboard_data(rows: int = 6, cols: int = 9, square_size_mm: float = 19.0) -> tuple:
-    """
-    Generates idealized geometric coordinate vectors to mock target checkerboards ``.
-    Projects perfect 3D coordinates into 2D camera pixels with intentional lens distortion.
-    """
-    # 1. Define ideal flat 3D object plane coordinates (Z = 0)
+    """Generates idealized geometric coordinate vectors to mock target checkerboards."""
     obj_points = np.zeros((rows * cols, 3), np.float32)
     obj_points[:, :2] = np.mgrid[0:cols, 0:rows].T.reshape(-1, 2) * square_size_mm
     
-    # 2. Hardcode a ground-truth intrinsic camera matrix (K)
     f_px = 3000.0
-    c_x, c_y = 2040.0, 1536.0 # Central principal points for a standard sensor grid
+    c_x, c_y = 2040.0, 1536.0
     K_true = np.array([[f_px,  0.0, c_x],
                        [ 0.0, f_px, c_y],
                        [ 0.0,  0.0, 1.0]], dtype=np.float32)
     
-    # 3. Inject an intentional baseline lens warping profile (Barrel distortion k1)
     dist_true = np.array([0.15, -0.04, 0.0, 0.0, 0.0], dtype=np.float32)
-    
-    # 4. Setup a sample mock camera position orientation pose
     rvec = np.array([0.05, -0.1, 0.02], dtype=np.float32)
-    tvec = np.array([10.0, -20.0, 450.0], dtype=np.float32) # Target placed 450mm away
+    tvec = np.array([10.0, -20.0, 450.0], dtype=np.float32)
     
-    # 5. Execute forward mathematical projection
     img_points, _ = cv2.projectPoints(obj_points, rvec, tvec, K_true, dist_true)
-    
     return obj_points, img_points.reshape(-1, 2), K_true, dist_true
+
+
+def generate_synthetic_checkerboard_session(n: int = 15, rows: int = 6, cols: int = 9, 
+                                          square_size_mm: float = 19.0, tilt_deg: float = 30.0, 
+                                          noise_px: float = 0.15, seed: int = 513, 
+                                          img_shape: tuple = (4080, 3072)) -> tuple:
+    """Generates synthetic multi-view checkerboard session (n views) with ground truth intrinsics."""
+    obj_p = np.zeros((rows * cols, 3), dtype=np.float32)
+    obj_p[:, :2] = np.mgrid[0:cols, 0:rows].T.reshape(-1, 2) * square_size_mm
+
+    w, h = img_shape
+    f_px = 3055.61
+    cx, cy = 1500.96, 2072.98
+    K_true = np.array([[f_px, 0.0, cx], [0.0, f_px, cy], [0.0, 0.0, 1.0]], dtype=np.float32)
+    dist_true = np.array([0.0247, -0.0659, 0.001, 0.0012, 0.0], dtype=np.float32)
+
+    rng = np.random.default_rng(seed)
+    syn_obj_list, syn_img_list = [], []
+
+    for i in range(n):
+        rvec = rng.uniform(-np.radians(tilt_deg), np.radians(tilt_deg), size=(3, 1)).astype(np.float32)
+        tvec = np.array([rng.uniform(-100, 100), rng.uniform(-80, 80), rng.uniform(400, 700)], dtype=np.float32).reshape(3, 1)
+
+        proj, _ = cv2.projectPoints(obj_p, rvec, tvec, K_true, dist_true)
+        proj = proj.reshape(-1, 2)
+        if noise_px > 0:
+            proj += rng.normal(0, noise_px, size=proj.shape).astype(np.float32)
+
+        syn_obj_list.append(obj_p)
+        syn_img_list.append(proj.reshape(-1, 1, 2))
+
+    return syn_obj_list, syn_img_list, (w, h), K_true, dist_true
