@@ -1,4 +1,6 @@
-# src/camera_toolkit/geometry.py
+"""
+Checkboard Detection, Zhang Calibration, Straightness analysis for measuring camera lens geometry.
+"""
 import cv2
 import numpy as np
 
@@ -40,29 +42,22 @@ def detect_checkerboard_corners(image_array: np.ndarray, rows: int, cols: int) -
 
 def run_extended_calibration(all_object_points: list, all_image_points: list, image_shape: tuple) -> dict:
     """
-    Runs Zhang's calibration method with CALIB_FIX_K3 to prevent corner extrapolation errors.
+    "Runs Zhang's extended calibration method fitting 5 distortion parameters (k1, k2, p1, p2, k3)
     Calculates analytical parameter uncertainties.
     """
-    # Fix k3 to 0.0 to prevent overfitting and extreme corner distortion extrapolation
-    flags = cv2.CALIB_FIX_K3
 
     rms, K, dist, rvecs, tvecs, sd_int, sd_ext, per_view = cv2.calibrateCameraExtended(
         all_object_points, 
         all_image_points, 
         image_shape, 
         None, 
-        None,
-        flags=flags
+        None
     )
     
     fx, fy, cx, cy = K[0, 0], K[1, 1], K[0, 2], K[1, 2]
     k1, k2, p1, p2, k3 = dist.ravel()[:5]
     
     sfx, sfy, scx, scy, sk1, sk2, sp1, sp2, sk3 = sd_int.ravel()[:9]
-    
-    per_view_errors = compute_per_view_reprojection_errors(
-        all_object_points, all_image_points, K, dist, rvecs, tvecs
-    )
     
     return {
         "rms_reprojection_error": [float(rms), 0.0],
@@ -75,24 +70,13 @@ def run_extended_calibration(all_object_points: list, all_image_points: list, im
         "radial_distortion_k3": [float(k3), float(sk3)],
         "tangential_distortion_p1": [float(p1), float(sp1)],
         "tangential_distortion_p2": [float(p2), float(sp2)],
-        "per_view_rms_errors": per_view_errors.tolist(),
-        "n_views": len(all_image_points)
+        "per_view_rms_errors": per_view.ravel().tolist(),
+        "n_views": len(all_image_points),
+        "rvecs": rvecs,
+        "tvecs": tvecs,
+        "K": K,
+        "dist": dist
     }
-
-
-def compute_per_view_reprojection_errors(all_object_points: list, all_image_points: list, K: np.ndarray, dist: np.ndarray, rvecs: list, tvecs: list) -> np.ndarray:
-    """
-    Computes per-view RMS reprojection errors to identify problematic face-on or warped frames.
-    """
-    errors = []
-    for i in range(len(all_object_points)):
-        img_points_projected, _ = cv2.projectPoints(
-            all_object_points[i], rvecs[i], tvecs[i], K, dist
-        )
-        err = cv2.norm(all_image_points[i], img_points_projected, cv2.NORM_L2) / np.sqrt(len(img_points_projected))
-        errors.append(err)
-    return np.array(errors, dtype=np.float32)
-
 
 def rectify_frame(image_array: np.ndarray, camera_matrix: np.ndarray, dist_coeffs: np.ndarray, alpha: float = 1.0) -> np.ndarray:
     """
@@ -125,7 +109,7 @@ def max_perpendicular_deviation(points: np.ndarray) -> float:
     return float(np.max(distances))
 
 
-def evaluate_straightness_improvement(all_image_points: list, camera_matrix: np.ndarray, dist_coeffs: np.ndarray, target_row_idx: int = 2, cols_per_row: int = 9) -> tuple:
+def evaluate_straightness_improvement(all_image_points: list, camera_matrix: np.ndarray, dist_coeffs: np.ndarray, target_row_idx: int = 0, cols_per_row: int = 9) -> tuple:
     """
     Quantifies the mathematical straightness correction for a specific checkerboard row.
     """
@@ -147,16 +131,16 @@ def evaluate_straightness_improvement(all_image_points: list, camera_matrix: np.
     return deviation_before, deviation_after
 
 
-def calculate_pixel_pitch_metrics(f_px_x: float, f_px_y: float, f_mm: float, f_35mm: float, image_shape: tuple) -> dict:
+def calculate_pixel_pitch_metrics(mean_focal_length_px: float, f_mm: float, f_35mm: float, image_shape: tuple) -> dict:
     """
     Cross-validates sensor pixel pitch using two independent models:
     Method 1: Empirical calibration focal length vs. EXIF physical focal length.
     Method 2: Crop factor & 35mm film equivalent projection (43.3 mm diagonal).
     """
-    if f_px_x <= 0 or f_px_y <= 0 or f_mm <= 0 or f_35mm <= 0:
+    if mean_focal_length_px <= 0 or f_mm <= 0 or f_35mm <= 0:
         raise ValueError("Focal length and pixel counts must be non-zero positive numbers.")
         
-    f_mean_px = (f_px_x + f_px_y) / 2.0
+    f_mean_px = mean_focal_length_px
     pitch_method1_um = (f_mm * 1000.0) / f_mean_px
     
     crop_factor = f_35mm / f_mm
