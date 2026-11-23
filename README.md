@@ -69,8 +69,9 @@ Every analytical module is validated on synthetic ground truth prior to processi
 
 ```text
 camera_characterization/
-├── config.yaml                          # Paths, checkerboard specs, slanted-edge ROIs, & ColorChecker bboxes
-├── camera_characterization_pipeline.py  # Interactive end-to-end characterization notebook/script
+├── config.yaml                              # Paths, checkerboard specs, slanted-edge ROIs, & ColorChecker bboxes
+├── calibration_working_distance_analysis.py # Analyzes 0.2m to 0.6m captures for optimal image dataset for geometric analysis
+├── camera_characterization_pipeline.py      # Interactive end-to-end characterization notebook/script
 ├── src/
 │   └── camera_toolkit/
 │       ├── main.py                      # CLI entrypoint executing all stages & exporting deliverables
