@@ -8,7 +8,7 @@ project:
 
 # 1. Geometry & Lens Distortion Calibration Parameters
 geometry:
-  input_dir: "./images/checkerboard"
+  input_dir: "./images/checkerboard/all"
   file_extension: ".dng"
   jpg_extension: ".jpg"
   focal_35mm_fallback: 25.0
@@ -19,8 +19,8 @@ geometry:
 
 # 2. Poisson-Gaussian Sensor Noise Model Parameters
 noise:
-  flat_field_dir: "./images/flat_fields"
-  dark_field_dir: "./images/dark_frames"
+  flat_dir: "./images/flat_fields"
+  dark_dir: "./images/dark_frames"
   file_extension: ".dng"
   patch_box:
     ymin: 1472               # Central patch bounding box coordinates
@@ -32,13 +32,25 @@ noise:
 resolution:
   input_dir: "./images/slanted_edge"
   file_extension: ".dng"
-  # 5 Slanted-Edge ROIs: 1 Center + 4 Corners (pixel coordinates {y, x, h, w})
+  regions:
+    - center
+    - top_left
+    - top_right
+    - bottom_left
+    - bottom_right
   rois:
-    center:       {y: 700,  x: 390,  h: 400, w: 200}
-    top_left:     {y: 100,  x: 100,  h: 400, w: 200}
-    top_right:    {y: 100,  x: 3400, h: 400, w: 200}
-    bottom_left:  {y: 2500, x: 100,  h: 400, w: 200}
-    bottom_right: {y: 2500, x: 3400, h: 400, w: 200}
+    top_left:
+      center: {"y": 200, "x": 110, "h":100, "w": 100} 
+    top_right:
+      center: {"y": 190, "x": 1170, "h":100, "w": 100}
+    center:
+      center: {"y": 920, "x": 690, "h":100, "w": 100}
+    bottom_left:
+      center: {"y": 1680, "x": 130, "h":100, "w": 100}
+    bottom_right:
+      center: {"y": 1700, "x": 1145, "h":100, "w": 100}
+    
+
 
 # 4. Color Science & Accuracy Calibration Parameters
 color:
