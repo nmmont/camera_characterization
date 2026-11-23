@@ -81,7 +81,7 @@ camera_characterization/
 │       ├── dynamics.py                  # Full-well capacity & engineering/usable dynamic range
 │       ├── color.py                     # Quarter-res linear RGB, LSC, von Kries WB, CCM, & CIEDE2000
 │       ├── simulator.py                 # Synthetic forward models for ground-truth verification
-│       ├── plots.py                     # Publication-grade diagnostic figures
+│       ├── plots.py                     # Diagnostic figures
 │       └── report_generator.py          # Automated Markdown report generator
 ├── test/
 │   ├── conftest.py                      # Shared test fixtures and path configuration
